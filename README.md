@@ -1,4 +1,4 @@
-# Banedanmark railway map
+# Stineprojekt — Banedanmark railway map
 
 A minimal Streamlit map showing the exact railway-section geometry from Banedanmark's
 **Strækningsafsnit (Open Data)** dataset.
