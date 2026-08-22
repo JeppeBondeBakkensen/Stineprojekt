@@ -1,0 +1,13 @@
+{
+  "workbench.colorTheme": "Tokyo Night Storm",
+  "files.associations": {
+    "pyproject.toml": "toml",
+    "*.toml": "toml"
+  },
+  "python.analysis.exclude": [
+    "**/pyproject.toml"
+  ],
+  "[toml]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  }
+}
