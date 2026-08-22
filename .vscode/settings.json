@@ -1,13 +1,12 @@
 {
-  "workbench.colorTheme": "Tokyo Night Storm",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+  "ty.interpreter": "${workspaceFolder}/.venv/bin/python",
   "files.associations": {
     "pyproject.toml": "toml",
     "*.toml": "toml"
   },
-  "python.analysis.exclude": [
-    "**/pyproject.toml"
-  ],
-  "[toml]": {
-    "editor.defaultFormatter": "charliermarsh.ruff"
-  }
+  "ruff.exclude": [
+    "pyproject.toml",
+    "*.toml"
+  ]
 }

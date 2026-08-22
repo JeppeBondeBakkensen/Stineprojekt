@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "enkia.tokyo-night",
+    "charliermarsh.ruff",
+    "astral-sh.ty",
+    "ms-python.python",
+    "tamasfe.even-better-toml"
+  ]
+}

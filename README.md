@@ -1,24 +1,12 @@
-# Banedanmark railway map
+# Test Project
 
-A minimal Streamlit map showing the exact railway-section geometry from Banedanmark's
-**Strækningsafsnit (Open Data)** dataset.
+A Python project using uv, ty, Ruff, pytest, and the Tokyo Night Storm VS Code
+theme.
 
-The app uses the user-provided file
-`BI_BTR_RELEASEAFSNIT_OD_1972479174689089199.geojson`. It contains all 957 polygon
-features in WGS84 (`EPSG:4326`) coordinates.
-
-Source:
-
-`https://services1.arcgis.com/QcgJt0vVxSaqMKl7/arcgis/rest/services/BI_BTR_RELEASEAFSNIT_OD/FeatureServer/0`
-
-## Run locally
-
-```bash
-source .venv/bin/activate
-streamlit run app.py
+```shell
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check
+uv run pytest
 ```
-
-The map intentionally has no filters, hover cards, highlighting, metrics, or metadata
-interface. Pan and zoom are the only interactions.
-
-# Stineprojekt

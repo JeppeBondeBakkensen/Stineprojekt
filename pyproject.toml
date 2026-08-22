@@ -1,11 +1,41 @@
 [project]
-name = "stineprojekt"
+name = "test-project"
 version = "0.1.0"
-description = "Interactive Banedanmark railway and contract map"
+description = "A Python project."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "openpyxl>=3.1",
-    "pydeck>=0.9",
-    "streamlit>=1.40",
+    "fastexcel>=0.21.0",
+    "openpyxl>=3.1.5",
+    "polars>=1.43.2",
+    "streamlit>=1.62.0",
+    "xlsx2csv>=0.8.6",
 ]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.12",
+  "ty>=0.0.1",
+  "watchdog>=6.0.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.ty]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
