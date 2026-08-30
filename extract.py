@@ -8,7 +8,16 @@ DATA_DIR = Path(__file__).parent
 EXCEL_PATH = DATA_DIR / "Oversigt over kontrakter på Spor Strøm forst og Sikring.xlsx"
 GEOJSON_PATH = DATA_DIR / "Danmarkskort_med_strækninger.geojson"
 FEJLKLASSIFICEREDE_BANENUMRE = [
-    "22", "27", "79", "81", "82", "83", "84", "85", "86", "88"
+    "22",
+    "27",
+    "79",
+    "81",
+    "82",
+    "83",
+    "84",
+    "85",
+    "86",
+    "88",
 ]
 UDFASEREDE_TIB = {"9", "36", "37"}
 S_BANE_TIB = {"88", "810", "820", "830", "840", "850", "860", "880"}
@@ -65,6 +74,7 @@ ACTIVE_BANENUMBERS = {
     "98",
     "99",
 }
+CONTRACT_SHEETS = ("Strøm og Materiel", "Sikring", "Beredskab (interne krav)")
 
 
 def normalize_tib(value: object) -> str | None:
@@ -111,13 +121,22 @@ def clean_excel_line_breaks(dataframe: pl.DataFrame) -> pl.DataFrame:
 @st.cache_resource(show_spinner="Indlæser kontraktdata...")
 def load_combined_data() -> pl.DataFrame:
     """Indlæs og sammenkæd kontrakt- og kortdata én gang."""
-    df_strom = clean_excel_line_breaks(
-        pl.read_excel(
-            EXCEL_PATH,
-            sheet_name="Strøm og Materiel",
-            engine="openpyxl",
+    frames = []
+    extra_frames = []
+    for sheet_name in CONTRACT_SHEETS:
+        df_sheet = clean_excel_line_breaks(
+            pl.read_excel(
+                EXCEL_PATH,
+                sheet_name=sheet_name,
+                engine="openpyxl",
+            )
         )
-    )
+        if sheet_name == "Strøm og Materiel":
+            frames.append(df_sheet.with_columns(pl.lit(sheet_name).alias("Ark")))
+        else:
+            extra_frames.append(df_sheet.with_columns(pl.lit(sheet_name).alias("Ark")))
+
+    df_strom = pl.concat(frames, how="diagonal_relaxed")
     banenr_tib = pl.col("Banenr. / TIB").cast(pl.String).str.strip_chars()
     referencenoegle = (
         pl.when(banenr_tib == "Banenummer")
@@ -158,8 +177,10 @@ def load_combined_data() -> pl.DataFrame:
         .drop_nulls(["Referenceværdi"])
         .filter(
             ~(
-                ((pl.col("Referencetype") == "TIB")
-                & pl.col("Referenceværdi").is_in(S_BANE_TIB))
+                (
+                    (pl.col("Referencetype") == "TIB")
+                    & pl.col("Referenceværdi").is_in(S_BANE_TIB)
+                )
                 | (
                     (pl.col("Referencetype") == "BANENR")
                     & pl.col("Referenceværdi")
@@ -173,9 +194,9 @@ def load_combined_data() -> pl.DataFrame:
             | pl.col("Referenceværdi").is_in(ACTIVE_BANENUMBERS)
         )
         .with_columns(
-            pl.concat_str(
-                ["Referencetype", "Referenceværdi"], separator=":"
-            ).alias("Referencenøgle")
+            pl.concat_str(["Referencetype", "Referenceværdi"], separator=":").alias(
+                "Referencenøgle"
+            )
         )
     )
 
@@ -233,12 +254,15 @@ def load_combined_data() -> pl.DataFrame:
     geojson_referencer = pl.concat(
         [banenummer_referencer, tib_referencer], how="vertical"
     ).with_columns(
-        pl.concat_str(
-            ["Referencetype", "Referenceværdi"], separator=":"
-        ).alias("Referencenøgle")
+        pl.concat_str(["Referencetype", "Referenceværdi"], separator=":").alias(
+            "Referencenøgle"
+        )
     )
-    return df_strom.join(
+    df_strom = df_strom.join(
         geojson_referencer,
         on=["Referencetype", "Referenceværdi", "Referencenøgle"],
         how="left",
     )
+    if extra_frames:
+        df_strom = pl.concat([df_strom, *extra_frames], how="diagonal_relaxed")
+    return df_strom

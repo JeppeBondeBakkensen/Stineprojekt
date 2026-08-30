@@ -4,7 +4,6 @@ from typing import Any
 
 import polars as pl
 import streamlit as st
-
 from extract import (
     is_active_banenumber,
     is_s_bane,
@@ -38,6 +37,36 @@ RESULT_COLUMNS = [
     "GFS",
     "Kontraktansvarlig (leder)",
     "SAP nummer",
+]
+
+SIKRING_RESULT_COLUMNS = [
+    "Kontraktens titel",
+    "Leverandørnavn",
+    "Geografisk område + Banenumre/TIB-strækning med responstid for den enkelte strækning",
+    "Ikraft-trædelse",
+    "Varighed _x000D_\ni år (inkl mobilisering + option på forlængelse)",
+    "Responstid",
+    "Beskrivelse af beredskabet",
+    BEREDSKAB_SIZE_COLUMN,
+    "Beskrivelse af boderne",
+    "Beskrevet fremgangsmåde omkring fejlretning",
+    "Vedligeholdelsesforvalter",
+    "GFS",
+    "Kontraktansvarlig (leder)",
+    "SAP nummer",
+]
+
+BEREDSKAB_RESULT_COLUMNS = [
+    "Afdeling ",
+    "Region",
+    "Maks. Responstid i rådighedsvagten (minutter)",
+    "Maks. Responstid i tjenestetiden (minutter",
+    "KPI-mål",
+    "Beskrivelse af beredskabet",
+    "Antal fejl som skal kunne håndteres på én gang ",
+    "Antal arbejdshold og personer pr. hold, som der kan stilles med.",
+    "Krav til dataregistrering",
+    "Definitioner",
 ]
 
 RESULT_COLUMN_RENAMES = {BEREDSKAB_SIZE_COLUMN: "Størrelse på beredskabet"}
@@ -100,8 +129,7 @@ def _simplify_ring(
                 projected_x, projected_y = start_x, start_y
             else:
                 projection = (
-                    (point_x - start_x) * delta_x
-                    + (point_y - start_y) * delta_y
+                    (point_x - start_x) * delta_x + (point_y - start_y) * delta_y
                 ) / length_squared
                 projection = max(0.0, min(1.0, projection))
                 projected_x = start_x + projection * delta_x
@@ -129,15 +157,11 @@ def _simplify_geometry(geometry: dict[str, Any]) -> None:
     coordinates = geometry.get("coordinates", [])
     if geometry.get("type") == "Polygon":
         geometry["coordinates"] = [
-            _simplify_ring(ring, MAP_SIMPLIFICATION_TOLERANCE)
-            for ring in coordinates
+            _simplify_ring(ring, MAP_SIMPLIFICATION_TOLERANCE) for ring in coordinates
         ]
     elif geometry.get("type") == "MultiPolygon":
         geometry["coordinates"] = [
-            [
-                _simplify_ring(ring, MAP_SIMPLIFICATION_TOLERANCE)
-                for ring in polygon
-            ]
+            [_simplify_ring(ring, MAP_SIMPLIFICATION_TOLERANCE) for ring in polygon]
             for polygon in coordinates
         ]
 
@@ -239,7 +263,8 @@ def banenumber_description(banenumber: str) -> str | None:
         return description
 
     descriptions = (
-        load_combined_data().filter(
+        load_combined_data()
+        .filter(
             (pl.col("Referencetype") == "BANENR")
             & (pl.col("Referenceværdi") == banenumber)
         )
@@ -473,9 +498,7 @@ def cached_filter_features(
         if value is not None:
             positions.intersection_update(index[filter_name].get(value, ()))
     return [
-        feature
-        for position, feature in enumerate(features)
-        if position in positions
+        feature for position, feature in enumerate(features) if position in positions
     ]
 
 
@@ -496,6 +519,40 @@ def contracts_for_reference(reference_type: str, reference_value: str) -> pl.Dat
 
 
 @st.cache_data(show_spinner=False)
+def contracts_for_sheet(sheet_name: str) -> pl.DataFrame:
+    sheet_data = load_combined_data().filter(pl.col("Ark") == sheet_name)
+    if sheet_name == "Sikring":
+        excluded_text = pl.col("Kontraktens titel").cast(
+            pl.String
+        ).str.to_lowercase().str.contains(
+            "s-bane|s bane|privatban|private overkørsl", literal=False
+        ) | pl.col(
+            "Geografisk område + Banenumre/TIB-strækning med responstid for den enkelte strækning"
+        ).cast(pl.String).str.to_lowercase().str.contains(
+            "s-bane|s bane|privatban|private overkørsl", literal=False
+        )
+        sheet_data = sheet_data.filter(~excluded_text)
+        return (
+            sheet_data.select([*SIKRING_RESULT_COLUMNS, "Ark"])
+            .rename(RESULT_COLUMN_RENAMES)
+            .unique()
+            .sort("Kontraktens titel")
+        )
+    if sheet_name == "Beredskab (interne krav)":
+        return (
+            sheet_data.select([*BEREDSKAB_RESULT_COLUMNS, "Ark"])
+            .unique()
+            .sort("Afdeling ", "Region")
+        )
+    return (
+        sheet_data.select([*RESULT_COLUMNS, "Ark"])
+        .rename(RESULT_COLUMN_RENAMES)
+        .unique()
+        .sort("Kontraktens titel")
+    )
+
+
+@st.cache_data(show_spinner=False)
 def contracts_for_features(
     ids: tuple[str, ...],
     reference_type: str | None = None,
@@ -509,11 +566,11 @@ def contracts_for_features(
     else:
         contracts = load_combined_data()
     contracts = contracts.filter(pl.col("Id").is_in(ids))
+    contracts = contracts.filter(pl.col("Ark") == "Strøm og Materiel")
 
     return (
-        contracts
-        .select(RESULT_COLUMNS)
+        contracts.select([*RESULT_COLUMNS, "Ark"])
         .rename(RESULT_COLUMN_RENAMES)
         .unique()
-        .sort("Kontraktens titel")
+        .sort("Ark", "Kontraktens titel")
     )

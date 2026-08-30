@@ -5,6 +5,7 @@ from rail_data import (
     banenumber_description,
     cached_filter_features,
     contracts_for_features,
+    contracts_for_sheet,
     feature_ids,
     get_banenumbers,
     get_kilometer_options,
@@ -49,7 +50,7 @@ st.set_page_config(
     page_icon="🗺️",
     layout="wide",
 )
-st.title("Fejlretningskort")
+st.title("Krav til leverandør af oursourcet fejlretning og vedligehold")
 
 pending_banenumber = st.session_state.pop("pending_banenumber", None)
 if pending_banenumber:
@@ -203,7 +204,7 @@ elif selected_tib:
 elif has_active_filter and has_single_banenumber:
     result_title = feature_title(filtered_features[0].get("properties", {}))
 else:
-    result_title = "Strøm og Materiel"
+    result_title = None
 
 if selected_objects:
     properties = selected_objects[0].get("properties", selected_objects[0])
@@ -213,7 +214,8 @@ if selected_objects:
         st.rerun()
 
 with filter_column:
-    st.subheader(result_title)
+    if result_title:
+        st.subheader(result_title)
     if not selected_ids:
         st.info("Vælg et filter eller klik på en strækning på kortet.")
     else:
@@ -251,29 +253,108 @@ with filter_column:
                 f"Samlet kilometrering: {kilometer_start:.1f}–{kilometer_end:.1f} km"
             )
 
-        if contracts.height:
-            for contract_number, contract in enumerate(
-                contracts.iter_rows(named=True), start=1
-            ):
-                title = contract.get("Kontraktens titel") or (
-                    f"Kontrakt {contract_number}"
-                )
-                with st.expander(str(title), expanded=contracts.height == 1):
-                    vertical_contract = {
-                        "Felt": list(contract.keys()),
-                        "Værdi": [
-                            "Ikke angivet" if value is None else str(value)
-                            for value in contract.values()
-                        ],
-                    }
-                    st.dataframe(
-                        vertical_contract,
-                        hide_index=True,
-                        width="stretch",
-                        column_config={
-                            "Felt": st.column_config.TextColumn(width="medium"),
-                            "Værdi": st.column_config.TextColumn(width="large"),
-                        },
+        strom_contracts = contracts
+        sikring_contracts = contracts_for_sheet("Sikring")
+        beredskab_contracts = contracts_for_sheet("Beredskab (interne krav)")
+
+        rendered_sections = 0
+        if strom_contracts.height:
+            rendered_sections += 1
+            with st.container(border=True):
+                st.subheader("Strøm og Materiel")
+                for contract_number, contract in enumerate(
+                    strom_contracts.iter_rows(named=True), start=1
+                ):
+                    title = contract.get("Kontraktens titel") or (
+                        f"Kontrakt {contract_number}"
                     )
-        else:
-            st.info("Der blev ikke fundet Strøm-data for dette valg.")
+                    with st.expander(str(title), expanded=strom_contracts.height == 1):
+                        vertical_contract = {
+                            "Felt": [key for key in contract.keys() if key != "Ark"],
+                            "Værdi": [
+                                "Ikke angivet"
+                                if contract.get(key) is None
+                                else str(contract.get(key))
+                                for key in contract.keys()
+                                if key != "Ark"
+                            ],
+                        }
+                        st.dataframe(
+                            vertical_contract,
+                            hide_index=True,
+                            width="stretch",
+                            column_config={
+                                "Felt": st.column_config.TextColumn(width="medium"),
+                                "Værdi": st.column_config.TextColumn(width="large"),
+                            },
+                        )
+
+        if sikring_contracts.height:
+            rendered_sections += 1
+            with st.container(border=True):
+                st.subheader("Sikring")
+                for contract_number, contract in enumerate(
+                    sikring_contracts.iter_rows(named=True), start=1
+                ):
+                    title = contract.get("Kontraktens titel") or (
+                        f"Kontrakt {contract_number}"
+                    )
+                    with st.expander(
+                        str(title), expanded=sikring_contracts.height == 1
+                    ):
+                        vertical_contract = {
+                            "Felt": [key for key in contract.keys() if key != "Ark"],
+                            "Værdi": [
+                                "Ikke angivet"
+                                if contract.get(key) is None
+                                else str(contract.get(key))
+                                for key in contract.keys()
+                                if key != "Ark"
+                            ],
+                        }
+                        st.dataframe(
+                            vertical_contract,
+                            hide_index=True,
+                            width="stretch",
+                            column_config={
+                                "Felt": st.column_config.TextColumn(width="medium"),
+                                "Værdi": st.column_config.TextColumn(width="large"),
+                            },
+                        )
+
+        if beredskab_contracts.height:
+            rendered_sections += 1
+            with st.container(border=True):
+                st.subheader("Beredskab (interne krav)")
+                for contract_number, contract in enumerate(
+                    beredskab_contracts.iter_rows(named=True), start=1
+                ):
+                    title = (
+                        f"{contract.get('Afdeling ') or 'Afdeling'} · "
+                        f"{contract.get('Region') or 'Region'}"
+                    )
+                    with st.expander(
+                        str(title), expanded=beredskab_contracts.height == 1
+                    ):
+                        vertical_contract = {
+                            "Felt": [key for key in contract.keys() if key != "Ark"],
+                            "Værdi": [
+                                "Ikke angivet"
+                                if contract.get(key) is None
+                                else str(contract.get(key))
+                                for key in contract.keys()
+                                if key != "Ark"
+                            ],
+                        }
+                        st.dataframe(
+                            vertical_contract,
+                            hide_index=True,
+                            width="stretch",
+                            column_config={
+                                "Felt": st.column_config.TextColumn(width="medium"),
+                                "Værdi": st.column_config.TextColumn(width="large"),
+                            },
+                        )
+
+        if rendered_sections == 0:
+            st.info("Der blev ikke fundet kontrakter for dette valg.")
