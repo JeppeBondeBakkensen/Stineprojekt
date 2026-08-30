@@ -13,6 +13,7 @@ from extract import (
 )
 
 GEOJSON_PATH = Path(__file__).with_name("Danmarkskort_med_strækninger.geojson")
+WEB_GEOJSON_PATH = Path(__file__).with_name("Danmarkskort_web.geojson")
 MAP_SIMPLIFICATION_TOLERANCE = 0.00001
 BEREDSKAB_SIZE_COLUMN = (
     "Antal arbejdshold og personer pr. hold, som leverandøren har pligt "
@@ -141,8 +142,8 @@ def _simplify_geometry(geometry: dict[str, Any]) -> None:
         ]
 
 
-@st.cache_resource(show_spinner="Indlæser kortdata...")
-def load_geojson() -> dict[str, Any]:
+def prepare_geojson() -> dict[str, Any]:
+    """Create the filtered and simplified map payload used by the web app."""
     with GEOJSON_PATH.open(encoding="utf-8") as file:
         geojson = json.load(file)
 
@@ -160,8 +161,17 @@ def load_geojson() -> dict[str, Any]:
         active_features.append(feature)
 
     geojson["features"] = active_features
-
     return geojson
+
+
+@st.cache_resource(show_spinner="Indlæser kortdata...")
+def load_geojson() -> dict[str, Any]:
+    # Avoid filtering and simplifying 23 MB of source geometry at startup.
+    # prepare_geojson.py rebuilds this asset when the source map changes.
+    if WEB_GEOJSON_PATH.exists():
+        with WEB_GEOJSON_PATH.open(encoding="utf-8") as file:
+            return json.load(file)
+    return prepare_geojson()
 
 
 def _natural_reference_sort_key(value: str) -> tuple[bool, int, str]:
@@ -400,6 +410,75 @@ def filter_features(
     return features_for_id(features, feature_id)
 
 
+@st.cache_resource(show_spinner=False)
+def _feature_filter_index() -> dict[str, dict[str, frozenset[int]]]:
+    """Index feature positions once so filter reruns avoid full-list scans."""
+    mutable_index: dict[str, dict[str, set[int]]] = {
+        "tib": {},
+        "banenumber": {},
+        "station": {},
+        "section": {},
+        "feature_id": {},
+    }
+
+    for position, feature in enumerate(load_geojson()["features"]):
+        properties = feature.get("properties", {})
+        values = {
+            "tib": {
+                value.strip()
+                for value in str(properties.get("TIB") or "").split(",")
+                if value.strip()
+            },
+            "banenumber": {str(properties.get("BANENR") or "").strip()},
+            "station": {
+                part.strip()
+                for part in str(properties.get("NAVN") or "").split(" - ")
+                if part.strip()
+            },
+            "section": {str(properties.get("NAVN") or "").strip()},
+            "feature_id": {str(properties.get("GLOBALID") or "").strip()},
+        }
+        for filter_name, filter_values in values.items():
+            for value in filter_values:
+                if value:
+                    mutable_index[filter_name].setdefault(value, set()).add(position)
+
+    return {
+        filter_name: {
+            value: frozenset(positions) for value, positions in values.items()
+        }
+        for filter_name, values in mutable_index.items()
+    }
+
+
+@st.cache_resource(show_spinner=False)
+def cached_filter_features(
+    tib: str | None = None,
+    banenumber: str | None = None,
+    station: str | None = None,
+    section: str | None = None,
+    feature_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Return indexed filter results cached by small, stable selection values."""
+    features = load_geojson()["features"]
+    positions = set(range(len(features)))
+    index = _feature_filter_index()
+    for filter_name, value in (
+        ("tib", tib),
+        ("banenumber", banenumber),
+        ("station", station),
+        ("section", section),
+        ("feature_id", feature_id),
+    ):
+        if value is not None:
+            positions.intersection_update(index[filter_name].get(value, ()))
+    return [
+        feature
+        for position, feature in enumerate(features)
+        if position in positions
+    ]
+
+
 def feature_ids(features: list[dict[str, Any]]) -> list[str]:
     return [
         str(feature["properties"]["GLOBALID"])
@@ -409,20 +488,27 @@ def feature_ids(features: list[dict[str, Any]]) -> list[str]:
 
 
 @st.cache_data(show_spinner=False)
+def contracts_for_reference(reference_type: str, reference_value: str) -> pl.DataFrame:
+    return load_combined_data().filter(
+        (pl.col("Referencetype") == reference_type)
+        & (pl.col("Referenceværdi") == reference_value)
+    )
+
+
+@st.cache_data(show_spinner=False)
 def contracts_for_features(
-    ids: list[str],
+    ids: tuple[str, ...],
     reference_type: str | None = None,
     reference_value: str | None = None,
 ) -> pl.DataFrame:
     if not ids:
         return pl.DataFrame()
 
-    contracts = load_combined_data().filter(pl.col("Id").is_in(ids))
     if reference_type and reference_value:
-        contracts = contracts.filter(
-            (pl.col("Referencetype") == reference_type)
-            & (pl.col("Referenceværdi") == reference_value)
-        )
+        contracts = contracts_for_reference(reference_type, reference_value)
+    else:
+        contracts = load_combined_data()
+    contracts = contracts.filter(pl.col("Id").is_in(ids))
 
     return (
         contracts

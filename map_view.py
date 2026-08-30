@@ -1,6 +1,20 @@
 from typing import Any, cast
 
 import pydeck as pdk
+import streamlit as st
+
+from rail_data import load_geojson
+
+
+class CachedDeck(pdk.Deck):
+    """A Deck that serializes its immutable map specification only once."""
+
+    _cached_json: str | None = None
+
+    def to_json(self) -> str:
+        if self._cached_json is None:
+            self._cached_json = super().to_json()
+        return self._cached_json
 
 
 def build_map(
@@ -37,7 +51,7 @@ def build_map(
             )
         )
 
-    return pdk.Deck(
+    return CachedDeck(
         map_style=cast(str, None),
         initial_view_state=pdk.ViewState(latitude=56.1, longitude=10.2, zoom=6),
         layers=layers,
@@ -55,3 +69,20 @@ def build_map(
             },
         ),
     )
+
+
+@st.cache_resource(show_spinner=False)
+def build_cached_map(highlighted_ids: tuple[str, ...]) -> pdk.Deck:
+    """Reuse the Deck object until the highlighted feature set changes."""
+    geojson = load_geojson()
+    selected_ids = set(highlighted_ids)
+    highlighted_features = (
+        [
+            feature
+            for feature in geojson["features"]
+            if str(feature.get("properties", {}).get("GLOBALID")) in selected_ids
+        ]
+        if selected_ids
+        else []
+    )
+    return build_map(geojson, highlighted_features)

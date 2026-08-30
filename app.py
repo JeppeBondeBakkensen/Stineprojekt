@@ -1,17 +1,16 @@
 import streamlit as st
 
-from map_view import build_map
+from map_view import build_cached_map
 from rail_data import (
     banenumber_description,
+    cached_filter_features,
     contracts_for_features,
     feature_ids,
-    filter_features,
     get_banenumbers,
     get_kilometer_options,
     get_sections,
     get_stations,
     get_tibs,
-    load_geojson,
     tib_label,
 )
 
@@ -58,7 +57,6 @@ if pending_banenumber:
         st.session_state.pop(key, None)
     st.session_state["banenumber"] = pending_banenumber
 
-geojson = load_geojson()
 filter_column, map_column = st.columns([1, 2], gap="large")
 
 current_tib = st.session_state.get("tib")
@@ -69,8 +67,7 @@ current_kilometer = st.session_state.get("kilometer")
 current_feature_id = current_kilometer[0] if current_kilometer else None
 
 tib_options = get_tibs(
-    filter_features(
-        geojson,
+    cached_filter_features(
         banenumber=current_banenumber,
         station=current_station,
         section=current_section,
@@ -78,8 +75,7 @@ tib_options = get_tibs(
     )
 )
 banenumber_options = get_banenumbers(
-    filter_features(
-        geojson,
+    cached_filter_features(
         tib=current_tib,
         station=current_station,
         section=current_section,
@@ -87,8 +83,7 @@ banenumber_options = get_banenumbers(
     )
 )
 station_options = get_stations(
-    filter_features(
-        geojson,
+    cached_filter_features(
         tib=current_tib,
         banenumber=current_banenumber,
         section=current_section,
@@ -96,8 +91,7 @@ station_options = get_stations(
     )
 )
 section_options = get_sections(
-    filter_features(
-        geojson,
+    cached_filter_features(
         tib=current_tib,
         banenumber=current_banenumber,
         station=current_station,
@@ -105,8 +99,7 @@ section_options = get_sections(
     )
 )
 kilometer_options = get_kilometer_options(
-    filter_features(
-        geojson,
+    cached_filter_features(
         tib=current_tib,
         banenumber=current_banenumber,
         station=current_station,
@@ -168,8 +161,7 @@ with filter_column:
     st.button("Nulstil filtre", on_click=reset_filters, width="stretch")
 
 selected_feature_id = selected_kilometer[0] if selected_kilometer else None
-filtered_features = filter_features(
-    geojson,
+filtered_features = cached_filter_features(
     tib=selected_tib,
     banenumber=selected_banenumber,
     station=selected_station,
@@ -187,10 +179,11 @@ has_active_filter = any(
     )
 )
 highlighted_features = filtered_features if has_active_filter else []
+highlighted_ids = tuple(feature_ids(highlighted_features))
 
 with map_column:
     map_event = st.pydeck_chart(
-        build_map(geojson, highlighted_features),
+        build_cached_map(highlighted_ids),
         key=f"danmarkskort-{st.session_state.get('map_revision', 0)}",
         on_select="rerun",
         selection_mode="single-object",
@@ -234,7 +227,7 @@ with filter_column:
             selected_reference_value = selected_tib
 
         contracts = contracts_for_features(
-            selected_ids,
+            tuple(selected_ids),
             reference_type=selected_reference_type,
             reference_value=selected_reference_value,
         )
