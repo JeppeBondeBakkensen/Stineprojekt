@@ -10,3 +10,6 @@ uv run ruff format --check .
 uv run ty check
 uv run pytest
 ```
+
+uv run streamlit run app.py
+

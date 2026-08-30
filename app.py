@@ -2,51 +2,95 @@ import streamlit as st
 
 from map_view import build_map
 from rail_data import (
+    banenumber_description,
     contracts_for_features,
     feature_ids,
     filter_features,
+    get_banenumbers,
     get_kilometer_options,
-    get_references,
     get_sections,
     get_stations,
+    get_tibs,
     load_geojson,
-    reference_label,
+    tib_label,
 )
 
-FILTER_KEYS = ["reference", "station", "section", "kilometer"]
+FILTER_KEYS = ["tib", "banenumber", "station", "section", "kilometer"]
+
+
+def reset_map_selection() -> None:
+    st.session_state.pop("pending_banenumber", None)
+    st.session_state["map_revision"] = st.session_state.get("map_revision", 0) + 1
 
 
 def reset_filters() -> None:
     for key in FILTER_KEYS:
+        st.session_state[key] = None
+    reset_map_selection()
+
+
+def reset_dependent_filters(*keys: str) -> None:
+    for key in keys:
         st.session_state.pop(key, None)
+    reset_map_selection()
 
 
-st.set_page_config(page_title="Danmarkskort", page_icon="🗺️", layout="wide")
-st.title("Danmarkskort med strækninger")
+def feature_title(properties: dict) -> str:
+    banenumber = str(properties.get("BANENR") or "").strip()
+    description = banenumber_description(banenumber) if banenumber else None
+    if banenumber and description:
+        return f"Banenummer {banenumber} · {description}"
+    if banenumber:
+        return f"Banenummer {banenumber} · {properties.get('NAVN', 'Valgt strækning')}"
+    return str(properties.get("NAVN") or "Valgt strækning")
+
+
+st.set_page_config(
+    page_title="Krav til leverandør af oursourcet fejlretning og vedligehold",
+    page_icon="🗺️",
+    layout="wide",
+)
+st.title("Fejlretningskort")
+
+pending_banenumber = st.session_state.pop("pending_banenumber", None)
+if pending_banenumber:
+    for key in FILTER_KEYS:
+        st.session_state.pop(key, None)
+    st.session_state["banenumber"] = pending_banenumber
 
 geojson = load_geojson()
 filter_column, map_column = st.columns([1, 2], gap="large")
 
-current_reference = st.session_state.get("reference")
+current_tib = st.session_state.get("tib")
+current_banenumber = st.session_state.get("banenumber")
 current_station = st.session_state.get("station")
 current_section = st.session_state.get("section")
 current_kilometer = st.session_state.get("kilometer")
 current_feature_id = current_kilometer[0] if current_kilometer else None
 
-reference_options = get_references(
-    {
-        "features": filter_features(
-            geojson,
-            station=current_station,
-            section=current_section,
-            feature_id=current_feature_id,
-        )
-    }
+tib_options = get_tibs(
+    filter_features(
+        geojson,
+        banenumber=current_banenumber,
+        station=current_station,
+        section=current_section,
+        feature_id=current_feature_id,
+    )
+)
+banenumber_options = get_banenumbers(
+    filter_features(
+        geojson,
+        tib=current_tib,
+        station=current_station,
+        section=current_section,
+        feature_id=current_feature_id,
+    )
 )
 station_options = get_stations(
     filter_features(
         geojson,
-        reference=current_reference,
+        tib=current_tib,
+        banenumber=current_banenumber,
         section=current_section,
         feature_id=current_feature_id,
     )
@@ -54,7 +98,8 @@ station_options = get_stations(
 section_options = get_sections(
     filter_features(
         geojson,
-        reference=current_reference,
+        tib=current_tib,
+        banenumber=current_banenumber,
         station=current_station,
         feature_id=current_feature_id,
     )
@@ -62,29 +107,33 @@ section_options = get_sections(
 kilometer_options = get_kilometer_options(
     filter_features(
         geojson,
-        reference=current_reference,
+        tib=current_tib,
+        banenumber=current_banenumber,
         station=current_station,
         section=current_section,
     )
 )
-
 with filter_column:
     st.subheader("Filtre")
-    selected_reference = st.selectbox(
-        "TIB eller banenummer",
-        reference_options,
-        format_func=reference_label,
+    selected_tib = st.selectbox(
+        "TIB",
+        tib_options,
+        format_func=tib_label,
         index=None,
-        placeholder="Søg eller vælg TIB eller banenummer",
-        key="reference",
+        placeholder="Søg eller vælg TIB",
+        key="tib",
+        on_change=reset_dependent_filters,
+        args=(("banenumber", "station", "section", "kilometer")),
     )
 
-    selected_station = st.selectbox(
-        "Station",
-        station_options,
+    selected_banenumber = st.selectbox(
+        "Banenummer",
+        banenumber_options,
         index=None,
-        placeholder="Søg eller vælg station",
-        key="station",
+        placeholder="Søg eller vælg banenummer",
+        key="banenumber",
+        on_change=reset_dependent_filters,
+        args=(("station", "section", "kilometer")),
     )
 
     selected_section = st.selectbox(
@@ -93,6 +142,18 @@ with filter_column:
         index=None,
         placeholder="Søg eller vælg strækning",
         key="section",
+        on_change=reset_dependent_filters,
+        args=(("station", "kilometer")),
+    )
+
+    selected_station = st.selectbox(
+        "Station",
+        station_options,
+        index=None,
+        placeholder="Søg eller vælg station",
+        key="station",
+        on_change=reset_dependent_filters,
+        args=(("kilometer",)),
     )
 
     selected_kilometer = st.selectbox(
@@ -102,13 +163,15 @@ with filter_column:
         index=None,
         placeholder="Søg eller vælg kilometrering",
         key="kilometer",
+        on_change=reset_dependent_filters,
     )
     st.button("Nulstil filtre", on_click=reset_filters, width="stretch")
 
 selected_feature_id = selected_kilometer[0] if selected_kilometer else None
 filtered_features = filter_features(
     geojson,
-    reference=selected_reference,
+    tib=selected_tib,
+    banenumber=selected_banenumber,
     station=selected_station,
     section=selected_section,
     feature_id=selected_feature_id,
@@ -116,7 +179,8 @@ filtered_features = filter_features(
 has_active_filter = any(
     value is not None
     for value in (
-        selected_reference,
+        selected_tib,
+        selected_banenumber,
         selected_station,
         selected_section,
         selected_kilometer,
@@ -127,7 +191,7 @@ highlighted_features = filtered_features if has_active_filter else []
 with map_column:
     map_event = st.pydeck_chart(
         build_map(geojson, highlighted_features),
-        key="danmarkskort",
+        key=f"danmarkskort-{st.session_state.get('map_revision', 0)}",
         on_select="rerun",
         selection_mode="single-object",
         height=700,
@@ -135,21 +199,88 @@ with map_column:
 
 selected_objects = map_event.selection["objects"].get("banestraekninger", [])
 selected_ids = feature_ids(filtered_features) if has_active_filter else []
-result_title = "Valgte Strøm-data"
+has_single_banenumber = (
+    len({feature.get("properties", {}).get("BANENR") for feature in filtered_features})
+    == 1
+)
+if selected_banenumber and filtered_features:
+    result_title = feature_title(filtered_features[0].get("properties", {}))
+elif selected_tib:
+    result_title = f"TIB {tib_label(selected_tib)}"
+elif has_active_filter and has_single_banenumber:
+    result_title = feature_title(filtered_features[0].get("properties", {}))
+else:
+    result_title = "Strøm og Materiel"
 
-if not has_active_filter and selected_objects:
+if selected_objects:
     properties = selected_objects[0].get("properties", selected_objects[0])
-    selected_id = properties.get("GLOBALID")
-    selected_ids = [str(selected_id)] if selected_id is not None else []
-    result_title = properties.get("NAVN", "Valgt strækning")
+    clicked_banenumber = str(properties.get("BANENR") or "").strip()
+    if clicked_banenumber and clicked_banenumber != selected_banenumber:
+        st.session_state["pending_banenumber"] = clicked_banenumber
+        st.rerun()
 
 with filter_column:
     st.subheader(result_title)
     if not selected_ids:
         st.info("Vælg et filter eller klik på en strækning på kortet.")
     else:
-        contracts = contracts_for_features(selected_ids)
+        selected_reference_type = None
+        selected_reference_value = None
+        if selected_banenumber:
+            selected_reference_type = "BANENR"
+            selected_reference_value = selected_banenumber
+        elif selected_tib:
+            selected_reference_type = "TIB"
+            selected_reference_value = selected_tib
+
+        contracts = contracts_for_features(
+            selected_ids,
+            reference_type=selected_reference_type,
+            reference_value=selected_reference_value,
+        )
+        result_features = (
+            filtered_features if has_active_filter else highlighted_features
+        )
+
+        kilometer_values = [
+            value
+            for feature in result_features
+            for value in (
+                feature.get("properties", {}).get("FRA_KM"),
+                feature.get("properties", {}).get("TIL_KM"),
+            )
+            if isinstance(value, int | float)
+        ]
+        if kilometer_values:
+            kilometer_start = min(kilometer_values)
+            kilometer_end = max(kilometer_values)
+            st.caption(
+                f"Samlet kilometrering: {kilometer_start:.1f}–{kilometer_end:.1f} km"
+            )
+
         if contracts.height:
-            st.dataframe(contracts, hide_index=True, width="stretch")
+            for contract_number, contract in enumerate(
+                contracts.iter_rows(named=True), start=1
+            ):
+                title = contract.get("Kontraktens titel") or (
+                    f"Kontrakt {contract_number}"
+                )
+                with st.expander(str(title), expanded=contracts.height == 1):
+                    vertical_contract = {
+                        "Felt": list(contract.keys()),
+                        "Værdi": [
+                            "Ikke angivet" if value is None else str(value)
+                            for value in contract.values()
+                        ],
+                    }
+                    st.dataframe(
+                        vertical_contract,
+                        hide_index=True,
+                        width="stretch",
+                        column_config={
+                            "Felt": st.column_config.TextColumn(width="medium"),
+                            "Værdi": st.column_config.TextColumn(width="large"),
+                        },
+                    )
         else:
             st.info("Der blev ikke fundet Strøm-data for dette valg.")

@@ -13,11 +13,11 @@ def build_map(
             data=geojson,
             pickable=True,
             auto_highlight=True,
-            highlight_color=[255, 215, 0, 255],
+            highlight_color=[226, 113, 0, 255],
             stroked=True,
             filled=True,
-            get_fill_color=[0, 120, 220, 80],
-            get_line_color=[0, 70, 160, 220],
+            get_fill_color=[3, 78, 162, 80],
+            get_line_color=[3, 78, 162, 220],
             line_width_min_pixels=4,
         )
     ]
@@ -31,8 +31,8 @@ def build_map(
                 pickable=False,
                 stroked=True,
                 filled=True,
-                get_fill_color=[255, 215, 0, 100],
-                get_line_color=[255, 215, 0, 255],
+                get_fill_color=[226, 113, 0, 100],
+                get_line_color=[226, 113, 0, 255],
                 line_width_min_pixels=7,
             )
         )
