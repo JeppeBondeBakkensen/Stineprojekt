@@ -314,7 +314,11 @@ if selected_objects:
     properties = selected_objects[0].get("properties", selected_objects[0])
     clicked_banenumber = str(properties.get("BANENR") or "").strip()
     clicked_tib = next(
-        (tib.strip() for tib in str(properties.get("TIB") or "").split(",") if tib.strip()),
+        (
+            tib.strip()
+            for tib in str(properties.get("TIB") or "").split(",")
+            if tib.strip()
+        ),
         "",
     )
     clicked_reference = (
@@ -334,12 +338,12 @@ if selected_objects:
     if clicked_reference and clicked_reference != current_reference:
         st.session_state["pending_map_reference"] = clicked_reference
         st.session_state.pop("selected_contract", None)
-        st.session_state["map_revision"] = st.session_state.get("map_revision", 0) + 1
         st.rerun()
 
 selected_ids = feature_ids(filtered_features) if has_active_filter else []
 has_single_banenumber = (
-    len({feature.get("properties", {}).get("BANENR") for feature in filtered_features}) == 1
+    len({feature.get("properties", {}).get("BANENR") for feature in filtered_features})
+    == 1
 )
 if selected_banenumber and filtered_features:
     result_title = feature_title(filtered_features[0].get("properties", {}))
@@ -350,12 +354,16 @@ elif has_active_filter and has_single_banenumber:
 else:
     result_title = "Info"
 
-information = information_column.container(height=720, border=True, key="contract_details")
+information = information_column.container(
+    height=720, border=True, key="contract_details"
+)
 information.subheader(result_title)
 if not selected_ids:
     information.caption("Vælg et filter eller klik på en strækning på kortet.")
 else:
-    reference_type = "BANENR" if selected_banenumber else "TIB" if selected_tib else None
+    reference_type = (
+        "BANENR" if selected_banenumber else "TIB" if selected_tib else None
+    )
     reference_value = selected_banenumber or selected_tib
     strom_contracts = contracts_for_features(
         tuple(selected_ids),
@@ -372,7 +380,9 @@ else:
         end = properties.get("TIL_KM")
         if start == 0 and end == 0:
             continue
-        kilometer_values.extend(value for value in (start, end) if isinstance(value, int | float))
+        kilometer_values.extend(
+            value for value in (start, end) if isinstance(value, int | float)
+        )
     summary = []
     if kilometer_values:
         summary.append(f"{min(kilometer_values):.1f}–{max(kilometer_values):.1f} km")
@@ -383,4 +393,6 @@ else:
     summary.append("Sikring og Beredskab vises altid")
     information.caption(" · ".join(summary))
     information.divider()
-    render_contract_browser(information, strom_contracts, sikring_contracts, beredskab_contracts)
+    render_contract_browser(
+        information, strom_contracts, sikring_contracts, beredskab_contracts
+    )
