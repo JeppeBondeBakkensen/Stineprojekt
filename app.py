@@ -322,10 +322,10 @@ if selected_objects:
         "",
     )
     clicked_reference = (
-        ("BANENR", clicked_banenumber)
-        if clicked_banenumber
-        else ("TIB", clicked_tib)
+        ("TIB", clicked_tib)
         if clicked_tib
+        else ("BANENR", clicked_banenumber)
+        if clicked_banenumber
         else None
     )
     current_reference = (
