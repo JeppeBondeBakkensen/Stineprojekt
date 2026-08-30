@@ -17,6 +17,7 @@ from rail_data import (
 )
 
 FILTER_KEYS = ["tib", "banenumber", "station", "section", "kilometer"]
+APP_TITLE = "Krav til leverandør af oursourcet fejlretning og vedligehold"
 
 
 def reset_map_selection() -> None:
@@ -37,6 +38,22 @@ def reset_dependent_filters(*keys: str) -> None:
     reset_map_selection()
 
 
+def on_banenumber_change() -> None:
+    reset_dependent_filters("station", "section", "kilometer")
+
+
+def on_tib_change() -> None:
+    reset_dependent_filters("station", "section", "kilometer")
+
+
+def on_station_change() -> None:
+    reset_dependent_filters("kilometer")
+
+
+def on_section_change() -> None:
+    reset_dependent_filters("station", "kilometer")
+
+
 def feature_title(properties: dict) -> str:
     banenumber = str(properties.get("BANENR") or "").strip()
     description = banenumber_description(banenumber) if banenumber else None
@@ -47,7 +64,11 @@ def feature_title(properties: dict) -> str:
     return str(properties.get("NAVN") or "Valgt strækning")
 
 
-st.set_page_config(page_title="Fejlretningskort", page_icon="🗺️", layout="wide")
+st.set_page_config(
+    page_title=APP_TITLE,
+    page_icon="🗺️",
+    layout="wide",
+)
 st.markdown(
     """
     <style>
@@ -93,6 +114,7 @@ st.markdown(
             color: #07885f; font-size: .75rem; font-weight: 700;
             letter-spacing: .06em; text-transform: uppercase;
         }
+        .st-key-contract_details .contract-eyebrow.fors { color: #2563eb; }
         .st-key-contract_details .contract-eyebrow.sikring { color: #d97706; }
         .st-key-contract_details .contract-eyebrow.beredskab { color: #dc2626; }
         .st-key-contract_navigation {
@@ -135,6 +157,8 @@ st.markdown(
         }
         .st-key-category_strom details summary,
         .st-key-category_strom details summary p { color: #07885f !important; }
+        .st-key-category_fors details summary,
+        .st-key-category_fors details summary p { color: #2563eb !important; }
         .st-key-category_sikring details summary,
         .st-key-category_sikring details summary p { color: #d97706 !important; }
         .st-key-category_beredskab details summary,
@@ -165,7 +189,10 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-st.markdown('<div class="app-title">Fejlretningskort</div>', unsafe_allow_html=True)
+st.markdown(
+    f'<div class="app-title">{APP_TITLE}</div>',
+    unsafe_allow_html=True,
+)
 
 pending_map_reference = st.session_state.pop("pending_map_reference", None)
 if pending_map_reference:
@@ -231,8 +258,7 @@ with filter_columns[0]:
         index=None,
         placeholder="Vælg banenummer",
         key="banenumber",
-        on_change=reset_dependent_filters,
-        args=(("station", "section", "kilometer")),
+        on_change=on_banenumber_change,
     )
 with filter_columns[1]:
     selected_tib = st.selectbox(
@@ -242,8 +268,7 @@ with filter_columns[1]:
         index=None,
         placeholder="Vælg TIB",
         key="tib",
-        on_change=reset_dependent_filters,
-        args=(("banenumber", "station", "section", "kilometer")),
+        on_change=on_tib_change,
     )
 with filter_columns[2]:
     selected_station = st.selectbox(
@@ -252,8 +277,7 @@ with filter_columns[2]:
         index=None,
         placeholder="Vælg station",
         key="station",
-        on_change=reset_dependent_filters,
-        args=(("kilometer",)),
+        on_change=on_station_change,
     )
 with filter_columns[3]:
     selected_section = st.selectbox(
@@ -262,8 +286,7 @@ with filter_columns[3]:
         index=None,
         placeholder="Vælg strækning",
         key="section",
-        on_change=reset_dependent_filters,
-        args=(("station", "kilometer")),
+        on_change=on_section_change,
     )
 with filter_columns[4]:
     selected_kilometer = st.selectbox(
@@ -352,7 +375,7 @@ elif selected_tib:
 elif has_active_filter and has_single_banenumber:
     result_title = feature_title(filtered_features[0].get("properties", {}))
 else:
-    result_title = "Info"
+    result_title = APP_TITLE
 
 information = information_column.container(
     height=720, border=True, key="contract_details"
@@ -370,6 +393,7 @@ else:
         reference_type=reference_type,
         reference_value=reference_value,
     )
+    fors_contracts = contracts_for_sheet("Fors, afvanding geoteknik, bro")
     sikring_contracts = contracts_for_sheet("Sikring")
     beredskab_contracts = contracts_for_sheet("Beredskab (interne krav)")
 
@@ -394,5 +418,9 @@ else:
     information.caption(" · ".join(summary))
     information.divider()
     render_contract_browser(
-        information, strom_contracts, sikring_contracts, beredskab_contracts
+        information,
+        strom_contracts,
+        sikring_contracts,
+        beredskab_contracts,
+        fors_contracts,
     )

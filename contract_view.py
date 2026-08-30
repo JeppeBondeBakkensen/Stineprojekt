@@ -25,6 +25,10 @@ def _text(value: object) -> str:
     return str(value)
 
 
+def _title_text(value: object) -> str:
+    return " ".join(_text(value).split())
+
+
 def _field(label: str, value: object) -> None:
     safe_label = escape(label)
     safe_value = escape(_text(value)).replace("\n", "<br>")
@@ -38,7 +42,10 @@ def _field(label: str, value: object) -> None:
 
 
 def _items(
-    strom: pl.DataFrame, sikring: pl.DataFrame, beredskab: pl.DataFrame
+    strom: pl.DataFrame,
+    sikring: pl.DataFrame,
+    beredskab: pl.DataFrame,
+    forsk: pl.DataFrame,
 ) -> list[ContractItem]:
     items = []
     for index, contract in enumerate(strom.iter_rows(named=True)):
@@ -46,11 +53,20 @@ def _items(
         items.append(
             ContractItem(f"strom-{index}", "Strøm og Materiel", title, contract)
         )
+    for index, contract in enumerate(forsk.iter_rows(named=True)):
+        title = _text(contract.get("Kontraktens titel"))
+        items.append(
+            ContractItem(
+                f"fors-{index}", "Fors, afvanding geoteknik, bro", title, contract
+            )
+        )
     for index, contract in enumerate(sikring.iter_rows(named=True)):
         title = _text(contract.get("Kontraktens titel"))
         items.append(ContractItem(f"sikring-{index}", "Sikring", title, contract))
     for index, contract in enumerate(beredskab.iter_rows(named=True)):
-        title = f"{_text(contract.get('Afdeling '))} · {_text(contract.get('Region'))}"
+        department = _title_text(contract.get("Afdeling "))
+        region = _title_text(contract.get("Region"))
+        title = f"{department} · {region}"
         items.append(
             ContractItem(
                 f"beredskab-{index}", "Beredskab (interne krav)", title, contract
@@ -197,8 +213,9 @@ def render_contract_browser(
     strom: pl.DataFrame,
     sikring: pl.DataFrame,
     beredskab: pl.DataFrame,
+    forsk: pl.DataFrame,
 ) -> None:
-    items = _items(strom, sikring, beredskab)
+    items = _items(strom, sikring, beredskab, forsk)
     if not items:
         container.info("Der blev ikke fundet kontrakter for dette valg.")
         return
@@ -222,6 +239,18 @@ def render_contract_browser(
             ):
                 selected_key = _render_navigation_items(
                     strom_items, selected_key, "strom"
+                )
+
+        fors_items = [
+            item for item in items if item.category == "Fors, afvanding geoteknik, bro"
+        ]
+        if fors_items:
+            with (
+                st.container(key="category_fors"),
+                st.expander("FORS, AFVANDING GEOTEKNIK, BRO"),
+            ):
+                selected_key = _render_navigation_items(
+                    fors_items, selected_key, "fors"
                 )
 
         sikring_items = [item for item in items if item.category == "Sikring"]
@@ -251,6 +280,7 @@ def render_contract_browser(
     with details_panel:
         color_class = {
             "Strøm og Materiel": "strom",
+            "Fors, afvanding geoteknik, bro": "fors",
             "Sikring": "sikring",
             "Beredskab (interne krav)": "beredskab",
         }[selected.category]

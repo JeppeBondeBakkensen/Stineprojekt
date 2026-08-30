@@ -566,7 +566,9 @@ def contracts_for_features(
     else:
         contracts = load_combined_data()
     contracts = contracts.filter(pl.col("Id").is_in(ids))
-    contracts = contracts.filter(pl.col("Ark") == "Strøm og Materiel")
+    contracts = contracts.filter(
+        pl.col("Ark").is_in(["Strøm og Materiel", "Fors, afvanding geoteknik, bro"])
+    )
 
     return (
         contracts.select([*RESULT_COLUMNS, "Ark"])

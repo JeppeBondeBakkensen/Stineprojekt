@@ -74,7 +74,12 @@ ACTIVE_BANENUMBERS = {
     "98",
     "99",
 }
-CONTRACT_SHEETS = ("Strøm og Materiel", "Sikring", "Beredskab (interne krav)")
+CONTRACT_SHEETS = (
+    "Strøm og Materiel",
+    "Sikring",
+    "Beredskab (interne krav)",
+    "Fors, afvanding geoteknik, bro",
+)
 
 
 def normalize_tib(value: object) -> str | None:
